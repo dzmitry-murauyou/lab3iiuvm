@@ -61,6 +61,7 @@
 			<Tool
 				Name="VCLinkerTool"
 				AdditionalDependencies="hexiosupp.lib"
+				AdditionalOptions="/SUBSYSTEM:WINDOWS,5.01"
 				LinkIncremental="2"
 				AdditionalLibraryDirectories="."
 				GenerateDebugInformation="true"
@@ -87,6 +88,8 @@
 			/>
 			<Tool
 				Name="VCPostBuildEventTool"
+				Description="Копирование HexIO.sys рядом с exe"
+				CommandLine="copy /Y &quot;$(ProjectDir)HexIO.sys&quot; &quot;$(OutDir)&quot;"
 			/>
 		</Configuration>
 		<Configuration
@@ -95,7 +98,6 @@
 			IntermediateDirectory="$(ConfigurationName)"
 			ConfigurationType="1"
 			CharacterSet="1"
-			WholeProgramOptimization="1"
 			>
 			<Tool
 				Name="VCPreBuildEventTool"
@@ -117,7 +119,7 @@
 				Optimization="2"
 				EnableIntrinsicFunctions="true"
 				PreprocessorDefinitions="WIN32;NDEBUG;_WINDOWS"
-				RuntimeLibrary="2"
+				RuntimeLibrary="0"
 				EnableFunctionLevelLinking="true"
 				UsePrecompiledHeader="2"
 				WarningLevel="3"
@@ -134,7 +136,10 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
+				AdditionalDependencies="hexiosupp.lib"
+				AdditionalOptions="/SUBSYSTEM:WINDOWS,5.01"
 				LinkIncremental="1"
+				AdditionalLibraryDirectories="."
 				GenerateDebugInformation="true"
 				SubSystem="2"
 				OptimizeReferences="2"
@@ -161,6 +166,8 @@
 			/>
 			<Tool
 				Name="VCPostBuildEventTool"
+				Description="Копирование HexIO.sys рядом с exe"
+				CommandLine="copy /Y &quot;$(ProjectDir)HexIO.sys&quot; &quot;$(OutDir)&quot;"
 			/>
 		</Configuration>
 	</Configurations>

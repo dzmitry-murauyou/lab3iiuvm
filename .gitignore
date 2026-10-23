@@ -1,0 +1,6 @@
+# VS2008 build artifacts
+Debug/
+Release/
+*.ncb
+*.suo
+*.user

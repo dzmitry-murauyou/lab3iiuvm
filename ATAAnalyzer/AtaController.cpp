@@ -10,22 +10,32 @@
 #define ATA_SR_DRQ  0x08  // Бит 3: Data Request (готово к обмену данными)
 #define ATA_SR_ERR  0x01  // Бит 0: Error
 
-AtaController::AtaController() {}
+AtaController::AtaController() : m_initialized(false) {}
 
 AtaController::~AtaController() {
     Cleanup();
 }
 
 bool AtaController::Initialize() {
-    if (m_hexIO.StartUp()) {
-        m_hexIO.AllowExclusiveAccess();
-        return true;
+    // Драйвер запускается один раз, повторные сканирования его не перезапускают.
+    if (m_initialized) return true;
+    if (!m_hexIO.StartUp()) return false;
+
+    // Без разрешения на доступ к портам вызовы _inp/_outp недопустимы.
+    if (!m_hexIO.AllowExclusiveAccess()) {
+        m_hexIO.ShutDown();
+        return false;
     }
-    return false; 
+
+    m_initialized = true;
+    return true;
 }
 
 void AtaController::Cleanup() {
-    m_hexIO.ShutDown();
+    if (m_initialized) {
+        m_hexIO.ShutDown();
+        m_initialized = false;
+    }
 }
 
 

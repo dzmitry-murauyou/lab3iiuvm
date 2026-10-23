@@ -7,7 +7,7 @@
 struct AtaDeviceInfo {
     bool isPresent;
     int channel;        // 0 - Primary (0x1F0), 1 - Secondary (0x170)
-    int driveSelect;    // 0 - Master (0xA0), 1 - Slave (0xB0)
+    int driveSelect;    // 0 - Master (DH=0xE0), 1 - Slave (DH=0xF0)
     
     std::string model;
     std::string serialNumber;
@@ -37,6 +37,7 @@ public:
 
 private:
     HexIOWrapper m_hexIO;
+    bool m_initialized;
 
     BYTE InByte(USHORT port);
     void OutByte(USHORT port, BYTE value);

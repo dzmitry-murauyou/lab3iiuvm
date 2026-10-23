@@ -23,6 +23,7 @@ private:
     void OnReset();    // Обработчик SRST
     void OnListSelect();
     void OnSaveReport();
+    void OnDrawButton(DRAWITEMSTRUCT* pDis);
 
     HWND m_hwnd;
     HWND m_hBtnScan;
@@ -30,6 +31,12 @@ private:
     HWND m_hBtnSave;
     HWND m_hListDevices;
     HWND m_hEditInfo;
+
+    // Простая тёмная тема: кисти фона и шрифты окна
+    HBRUSH m_hBkBrush;
+    HBRUSH m_hEditBrush;
+    HFONT m_hFont;
+    HFONT m_hFontMono;
 
     AtaController m_ataController;
     std::vector<AtaDeviceInfo> m_devices;
