@@ -28,6 +28,9 @@ public:
 
     bool Initialize();
     void Cleanup();
+
+    // Детализация последней ошибки инициализации драйвера (для вывода в GUI)
+    const std::string& GetLastErrorText() const { return m_lastError; }
     
     //программный сброс (SRST) через регистр DC
     void SoftwareReset(int channel);
@@ -38,6 +41,11 @@ public:
 private:
     HexIOWrapper m_hexIO;
     bool m_initialized;
+    std::string m_lastError;
+
+    // Удаляет ранее установленную службу hexio, если она ссылается не на
+    // текущий HexIO.sys (служба могла остаться от прошлых запусков из другой папки)
+    void RemoveStaleService(const char* expectedSysPath);
 
     BYTE InByte(USHORT port);
     void OutByte(USHORT port, BYTE value);

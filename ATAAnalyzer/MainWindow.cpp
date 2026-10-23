@@ -199,7 +199,10 @@ void MainWindow::OnScan() {
     SetWindowTextA(m_hEditInfo, "");
 
     if (!m_ataController.Initialize()) {
-        SetWindowTextA(m_hEditInfo, "ОШИБКА: Драйвер HexIO не запущен!");
+        std::string errText = "ОШИБКА: Драйвер HexIO не запущен!";
+        if (!m_ataController.GetLastErrorText().empty())
+            errText += "\r\n" + m_ataController.GetLastErrorText();
+        SetWindowTextA(m_hEditInfo, errText.c_str());
         return;
     }
 
@@ -229,7 +232,10 @@ void MainWindow::OnScan() {
 // ============================================================
 void MainWindow::OnReset() {
     if (!m_ataController.Initialize()) {
-        SetWindowTextA(m_hEditInfo, "ОШИБКА: Драйвер HexIO не запущен!");
+        std::string errText = "ОШИБКА: Драйвер HexIO не запущен!";
+        if (!m_ataController.GetLastErrorText().empty())
+            errText += "\r\n" + m_ataController.GetLastErrorText();
+        SetWindowTextA(m_hEditInfo, errText.c_str());
         return;
     }
 

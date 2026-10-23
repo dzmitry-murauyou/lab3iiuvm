@@ -1,5 +1,7 @@
 #include "stdafx.h"
 #include "AtaController.h"
+#include <winsvc.h>
+#include <string.h>
 #include <conio.h>
 #include <sstream>
 #include <iomanip>
@@ -19,6 +21,26 @@ AtaController::~AtaController() {
 bool AtaController::Initialize() {
     // Драйвер запускается один раз, повторные сканирования его не перезапускают.
     if (m_initialized) return true;
+    m_lastError.clear();
+
+    // HexIOWrapper ищет драйвер как <текущий каталог>\hexio.sys, а текущий
+    // каталог в WinMain выставлен в папку с exe. Проверяем файл заранее,
+    // иначе ошибка службы будет непонятной ("файл не найден" от SCM).
+    char sysPath[MAX_PATH] = { 0 };
+    GetModuleFileNameA(NULL, sysPath, MAX_PATH);
+    char* slash = strrchr(sysPath, '\\');
+    if (slash != NULL) *(slash + 1) = '\0';
+    strcat_s(sysPath, MAX_PATH, "HexIO.sys");
+
+    if (GetFileAttributesA(sysPath) == INVALID_FILE_ATTRIBUTES) {
+        m_lastError = std::string("Не найден файл драйвера рядом с exe:\r\n") + sysPath;
+        return false;
+    }
+
+    // Служба hexio могла остаться от прошлых запусков с путём к уже
+    // удалённой папке - тогда StartService всегда будет падать.
+    RemoveStaleService(sysPath);
+
     if (!m_hexIO.StartUp()) return false;
 
     // Без разрешения на доступ к портам вызовы _inp/_outp недопустимы.
@@ -29,6 +51,61 @@ bool AtaController::Initialize() {
 
     m_initialized = true;
     return true;
+}
+
+void AtaController::RemoveStaleService(const char* expectedSysPath) {
+    SC_HANDLE scm = OpenSCManagerA(NULL, NULL, SC_MANAGER_CONNECT);
+    if (scm == NULL) return;
+
+    SC_HANDLE svc = OpenServiceA(scm, "hexio",
+        SERVICE_QUERY_CONFIG | SERVICE_QUERY_STATUS | SERVICE_STOP | DELETE);
+    if (svc == NULL) {
+        CloseServiceHandle(scm);
+        return;  // Службы нет - удалять нечего
+    }
+
+    // Сравниваем зарегистрированный путь к .sys с текущим
+    bool stale = true;
+    DWORD bytesNeeded = 0;
+    QueryServiceConfigA(svc, NULL, 0, &bytesNeeded);
+    if (bytesNeeded > 0) {
+        std::vector<char> buf(bytesNeeded);
+        QUERY_SERVICE_CONFIGA* cfg = (QUERY_SERVICE_CONFIGA*)&buf[0];
+        if (QueryServiceConfigA(svc, cfg, bytesNeeded, &bytesNeeded) &&
+            cfg->lpBinaryPathName != NULL &&
+            lstrcmpiA(cfg->lpBinaryPathName, expectedSysPath) == 0) {
+            stale = false;  // Служба уже ссылается на наш HexIO.sys
+        }
+    }
+
+    if (stale) {
+        SERVICE_STATUS status;
+        if (QueryServiceStatus(svc, &status) && status.dwCurrentState != SERVICE_STOPPED) {
+            ControlService(svc, SERVICE_CONTROL_STOP, &status);
+            for (int i = 0; i < 20; ++i) {
+                if (!QueryServiceStatus(svc, &status) || status.dwCurrentState == SERVICE_STOPPED) break;
+                Sleep(100);
+            }
+        }
+        DeleteService(svc);
+    }
+
+    CloseServiceHandle(svc);
+    CloseServiceHandle(scm);
+
+    if (stale) {
+        // Ждём, пока SCM окончательно уберёт удалённую службу,
+        // иначе CreateService в StartUp вернёт ошибку 1072.
+        for (int i = 0; i < 20; ++i) {
+            SC_HANDLE m = OpenSCManagerA(NULL, NULL, SC_MANAGER_CONNECT);
+            if (m == NULL) break;
+            SC_HANDLE s = OpenServiceA(m, "hexio", SERVICE_QUERY_STATUS);
+            if (s != NULL) CloseServiceHandle(s);
+            CloseServiceHandle(m);
+            if (s == NULL) break;
+            Sleep(100);
+        }
+    }
 }
 
 void AtaController::Cleanup() {
