@@ -148,6 +148,11 @@ void AtaController::SwapStringBytes(char* str, int length) {
         str[end] = '\0';
         end--;
     }
+
+    // Серийные номера производители часто дополняют пробелами СЛЕВА
+    int start = 0;
+    while (str[start] == ' ') start++;
+    if (start > 0) memmove(str, str + start, strlen(str + start) + 1);
 }
 
 bool AtaController::WaitForStatus(USHORT statusPort, BYTE maskClear, BYTE maskSet, DWORD timeoutMs) {
@@ -202,17 +207,39 @@ bool AtaController::ReadIdentifyData(USHORT basePort, USHORT controlPort, int dr
         return false;
     }
 
-    // 4. Запись команды IDENTIFY DEVICE (0xEC) в регистр CR (Command Register)
+    // 4. Подготовка регистров и запись команды IDENTIFY DEVICE (0xEC) в CR.
+    // Перед командой SC, SN, CL и CH обнуляются (для IDENTIFY не используются,
+    // а сигнатуру ATAPI устройство выставит в CL/CH уже после сброса команды).
+    OutByte(scPort, 0);
+    OutByte(snPort, 0);
+    OutByte(clPort, 0);
+    OutByte(chPort, 0);
+
     BYTE cmd = 0xEC;
     OutByte(cr_srPort, cmd);  // Запись в 0x1F7 = регистр CR
-    Sleep(15);
 
-    status = InByte(asPort);
+    // Ждём окончания выполнения команды: BSY=0 и далее DRQ=1 (ATA-устройство
+    // готово отдать данные) либо ERR=1 (команда отклонена - так отвечает ATAPI).
+    // Одного чтения статуса недостаточно: медленное устройство ещё держит BSY.
+    DWORD waitStart = GetTickCount();
+    do {
+        status = InByte(asPort);
+        if (!(status & ATA_SR_BSY) && (status & (ATA_SR_DRQ | ATA_SR_ERR))) break;
+        Sleep(2);
+    } while ((GetTickCount() - waitStart) < 1000);
 
     // Обработка ATAPI (CD-ROM / ISO) — по сигнатуре в CL/CH
-    if ((status & ATA_SR_ERR) || !(status & ATA_SR_DRQ)) {
+    if (status & ATA_SR_ERR) {
+        BYTE err = InByte(errPort);  // Регистр ошибок ER (0x1F1/0x171)
         BYTE cylL = InByte(clPort);
         BYTE cylH = InByte(chPort);
+
+        std::ostringstream ssErr;
+        ssErr << "  -> ERR=1 после 0xEC, ER=0x" << std::hex << std::uppercase
+              << std::setw(2) << std::setfill('0') << (int)err
+              << ", CL=0x" << std::setw(2) << (int)cylL
+              << ", CH=0x" << std::setw(2) << (int)cylH << "\r\n";
+        log += ssErr.str();
 
         if (cylL == 0x14 && cylH == 0xEB) {
             cmd = 0xA1;  // IDENTIFY PACKET DEVICE
@@ -267,6 +294,9 @@ bool AtaController::ReadIdentifyData(USHORT basePort, USHORT controlPort, int dr
                             ((ULONGLONG)identifyBuffer[102] << 32) |
                             ((ULONGLONG)identifyBuffer[101] << 16) |
                             ((ULONGLONG)identifyBuffer[100]);
+        if (info.totalSectors == 0) {
+            info.totalSectors = ((DWORD)identifyBuffer[61] << 16) | (DWORD)identifyBuffer[60];
+        }
     } else {
         info.totalSectors = ((DWORD)identifyBuffer[61] << 16) | (DWORD)identifyBuffer[60];
     }
